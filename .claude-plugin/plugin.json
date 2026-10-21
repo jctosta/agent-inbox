@@ -1,6 +1,6 @@
 {
   "name": "agent-inbox",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "A persistent inbox of things agents are waiting on you for: Claude flags them with flag_for_user, you see them above the prompt and clear them with /done.",
   "author": { "name": "Carlos Tosta" },
   "license": "MIT",
