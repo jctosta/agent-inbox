@@ -1,0 +1,14 @@
+{
+  "name": "agent-inbox",
+  "description": "agent-inbox: a persistent list of what coding agents are waiting on you for.",
+  "owner": {
+    "name": "Carlos Tosta"
+  },
+  "plugins": [
+    {
+      "name": "agent-inbox",
+      "source": "./",
+      "description": "A persistent inbox of things agents are waiting on you for, shared with pi."
+    }
+  ]
+}

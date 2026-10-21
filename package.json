@@ -1,0 +1,30 @@
+{
+  "name": "agent-inbox",
+  "version": "0.1.0",
+  "description": "A persistent inbox of things coding agents are waiting on you for. One list per project, shared by Claude Code (a mod) and pi (an extension).",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "author": "Carlos Tosta",
+  "keywords": ["pi-package", "claude-code-mod"],
+  "pi": {
+    "extensions": ["./pi/index.ts"]
+  },
+  "scripts": {
+    "test": "npm run test:claude && npm run test:pi",
+    "test:claude": "claude plugin test .",
+    "test:pi": "tsx pi/smoke.ts",
+    "validate": "claude plugin validate .",
+    "typecheck:pi": "tsc -p pi"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
