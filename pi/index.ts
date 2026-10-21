@@ -27,6 +27,7 @@ import {
 	RESOLVE_TOOL_NAME,
 	addItem,
 	closeItem,
+	damagedFileError,
 	findProjectRoot,
 	flagResultText,
 	inboxDir,
@@ -78,6 +79,8 @@ export default function agentInbox(pi: ExtensionAPI) {
 	let project = "";
 	let inbox: Inbox | undefined;
 	let lastMtime = -1;
+	/** Set while the file does not parse: then nothing writes over it. */
+	let damage: string | undefined;
 	let lastToldDigest: string | undefined;
 	let poll: ReturnType<typeof setInterval> | undefined;
 	let uiCtx: ExtensionContext | undefined;
@@ -94,10 +97,13 @@ export default function agentInbox(pi: ExtensionAPI) {
 	const readInbox = (): Inbox => {
 		if (!path || !existsSync(path)) {
 			lastMtime = 0;
+			damage = undefined;
 			return parseInbox("", project);
 		}
 		lastMtime = statSync(path).mtimeMs;
-		return parseInbox(readFileSync(path, "utf8"), project);
+		const text = readFileSync(path, "utf8");
+		damage = damagedFileError(text, path);
+		return parseInbox(text, project);
 	};
 
 	const writeInbox = (next: Inbox) => {
@@ -110,8 +116,11 @@ export default function agentInbox(pi: ExtensionAPI) {
 	};
 
 	/** Re-read the file, apply `change`, write it if it changed, redraw. */
-	const mutate = <R extends { inbox: Inbox; ok: boolean }>(change: (current: Inbox, now: string) => R): R => {
+	const mutate = <R extends { inbox: Inbox; ok: boolean }>(
+		change: (current: Inbox, now: string) => R,
+	): R | { ok: false; inbox: Inbox; error: string } => {
 		const current = readInbox();
+		if (damage) return { ok: false, inbox: current, error: damage };
 		const result = change(current, new Date().toISOString());
 		if (result.ok && result.inbox !== current) writeInbox(result.inbox);
 		inbox = result.inbox;

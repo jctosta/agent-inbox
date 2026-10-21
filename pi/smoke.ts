@@ -134,6 +134,12 @@ try {
 	assert.equal(json.items.find((i: { n: number }) => i.n === 2).status, "done");
 	assert.equal(json.items.find((i: { n: number }) => i.n === 2).closedBy, "you");
 
+	// 5. A damaged file is left alone, not written over with an empty list.
+	const damaged = readFileSync(file, "utf8").slice(0, 80);
+	writeFileSync(file, damaged);
+	await session.prompt("/inbox add Renew the domain");
+	assert.equal(readFileSync(file, "utf8"), damaged);
+
 	console.log("pi smoke test passed:", file);
 } finally {
 	session.dispose();

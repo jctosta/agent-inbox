@@ -73,4 +73,4 @@ npm run typecheck:pi
 
 - Mods and pi extensions run unsandboxed, with your permissions. This one only reads and writes its own JSON file under `~/.agent-inbox`. It makes no network calls and runs no processes.
 - Claude Code's VS Code panel and `claude -p` run the tools but don't draw the band or the pane.
-- Writes are read-modify-write on a small file. pi writes atomically. Two agents closing items in the same instant could still race, but the file never ends up half-written from pi's side.
+- Writes are read-modify-write on a small file. pi writes atomically. Two agents closing items in the same instant could still race, but the file never ends up half-written from pi's side. If the file stops parsing (a bad hand edit, an interrupted write), neither agent writes over it: changes fail with a message naming the file until you fix or delete it.

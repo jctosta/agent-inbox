@@ -155,6 +155,22 @@ export function parseInbox(text: string | undefined, project: string): Inbox {
   }
 }
 
+/**
+ * Why the file must not be written over, if it must not: it holds text that
+ * does not parse (a half-written file, a bad hand edit). It reads as an empty
+ * inbox, so writing the next change would silently lose every item in it.
+ */
+export function damagedFileError(text: string | undefined, path: string): string | undefined {
+  if (!text || !text.trim()) return undefined
+  try {
+    const raw: unknown = JSON.parse(text)
+    if (raw && typeof raw === 'object') return undefined
+  } catch {
+    // falls through
+  }
+  return `inbox file ${path} is not valid JSON; fix or delete it`
+}
+
 export function serializeInbox(inbox: Inbox): string {
   return JSON.stringify(inbox, null, 2) + '\n'
 }

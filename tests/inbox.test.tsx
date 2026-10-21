@@ -222,3 +222,13 @@ test('titles in other scripts are told apart when deduping', async ($, on) => {
   const second = await $.tool.call({ tool: FLAG, title: '审核代码' })
   expect(second.result).toContain('#2')
 })
+
+test('a damaged inbox file is left alone, not written over', async ($, on) => {
+  const path = `/home/carlos/.agent-inbox/${projectSlug(ROOT)}.json`
+  const damaged = '{"version":1,"nextN":4,"items":[{"n":1,"title":"Sign the DPA"'
+  const { files } = world(on, new Map([[path, damaged]]))
+  await start($)
+  const r = await $.tool.call({ tool: FLAG, title: 'Renew the domain' })
+  expect(r.result).toContain('not valid JSON')
+  expect(files.get(path)).toBe(damaged)
+})

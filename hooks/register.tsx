@@ -17,6 +17,7 @@ import {
   RESOLVE_TOOL_SCHEMA,
   addItem,
   closeItem,
+  damagedFileError,
   emptyInbox,
   findProjectRoot,
   flagResultText,
@@ -51,7 +52,9 @@ const mem: {
   project: string
   lastMtime: number
   lastContextDigest: string | undefined
-} = { path: undefined, project: '', lastMtime: -1, lastContextDigest: undefined }
+  /** Set while the file does not parse: then nothing writes over it. */
+  damage: string | undefined
+} = { path: undefined, project: '', lastMtime: -1, lastContextDigest: undefined, damage: undefined }
 
 // ------------------------------------------------------------------ file I/O
 
@@ -68,11 +71,14 @@ async function readInbox($: $): Promise<Inbox> {
   const file = await resolvePath($)
   if (!(await $.fs.exists(file))) {
     mem.lastMtime = 0
+    mem.damage = undefined
     return emptyInbox(mem.project)
   }
-  const text = await $.fs.read(file)
+  const read = await $.fs.read(file)
+  const text = typeof read === 'string' ? read : ''
   mem.lastMtime = (await $.fs.stat(file)).mtimeMs
-  return parseInbox(typeof text === 'string' ? text : '', mem.project)
+  mem.damage = damagedFileError(text, file)
+  return parseInbox(text, mem.project)
 }
 
 async function load($: $): Promise<Inbox> {
@@ -85,8 +91,9 @@ async function load($: $): Promise<Inbox> {
 async function mutate<R extends { inbox: Inbox; ok: boolean }>(
   $: $,
   change: (inbox: Inbox, now: string) => R,
-): Promise<R> {
+): Promise<R | { ok: false; inbox: Inbox; error: string }> {
   const current = await readInbox($)
+  if (mem.damage) return { ok: false, inbox: current, error: mem.damage }
   const now = new Date(await $.clock.now()).toISOString()
   const result = change(current, now)
   if (result.ok && result.inbox !== current) {
