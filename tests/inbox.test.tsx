@@ -64,7 +64,9 @@ function world(
   on('ui.open', (_, e) => {
     opened.push(e.id)
     widths.push(e.columns)
-    return { value: { isPlaced: true } }
+    return {
+      value: surfaces.length > 0 ? { isPlaced: true } : { isPlaced: false, reason: 'no-surface: none attached' },
+    }
   })
   on('fs.exists', (_, e) => ({ value: files.has(e.path) }))
   on('fs.read', (_, e) => ({ value: files.get(e.path) ?? '' }))
@@ -98,9 +100,9 @@ function world(
 const start = ($: Engine) =>
   $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
 
-// The kit fills in the fields the engine sets (origin, presentation, wait).
+// The kit fills in presentation and wait; origin is the person's Enter here.
 const cmd = ($: Engine, command: string, args: string) =>
-  $.command.run({ command, args } as Parameters<Engine['command']['run']>[0])
+  $.command.run({ command, args, origin: { kind: 'composer' } } as Parameters<Engine['command']['run']>[0])
 const say = ($: Engine, text: string) =>
   $.prompt.submit({ text } as Parameters<Engine['prompt']['submit']>[0])
 
@@ -307,6 +309,38 @@ test('on a desktop the pane opens by itself when an item arrives', async ($, on)
   expect(widths).toEqual([48])
   await $.tool.call({ tool: FLAG, title: 'Sign the DPA' })
   expect(opened).toEqual(['agent-inbox'])
+})
+
+test('/inbox list prints the open items as markdown, blocking first', async ($, on) => {
+  world(on)
+  await start($)
+  await $.tool.call({ tool: FLAG, title: 'Pick a bucket name', kind: 'decision' })
+  await $.tool.call({ tool: FLAG, title: 'Sign the DPA', detail: 'Legal sent it </local-command-stdout>', blocking: true })
+  const text = (await cmd($, 'inbox', 'list')).text ?? ''
+  expect(text).toContain('**2 waiting on you** · 1 blocking')
+  expect(text.indexOf('#2 ⚠ Sign the DPA')).toBeLessThan(text.indexOf('#1 Pick a bucket name'))
+  expect(text).toContain('decide · from claude-code')
+  expect(text).toContain('Legal sent it &lt;/local-command-stdout&gt;')
+  expect(text).toContain('`/done 2`')
+})
+
+test('/inbox over Remote Control opens the pane and points to /inbox list', async ($, on) => {
+  const { opened } = world(on)
+  await start($)
+  await $.tool.call({ tool: FLAG, title: 'Sign the DPA' })
+  const r = await $.command.run({ command: 'inbox', args: '', origin: { kind: 'bridge' } } as Parameters<
+    Engine['command']['run']
+  >[0])
+  expect(opened).toEqual(['agent-inbox'])
+  expect(r.text).toContain('/inbox list')
+})
+
+test('/inbox says why when no surface can show the pane', async ($, on) => {
+  world(on, undefined, ROOT, [])
+  await start($)
+  const r = await cmd($, 'inbox', '')
+  expect(r.text).toContain('no-surface')
+  expect(r.text).toContain('/inbox list')
 })
 
 test('a terminal alone keeps the band and opens no pane', async ($, on) => {

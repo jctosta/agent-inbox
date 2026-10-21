@@ -299,7 +299,7 @@ export const KIND_LABEL: Record<ItemKind, string> = {
  * Item text comes from agents and a shared file, not from the human: escape
  * angle brackets so it cannot close (or open) the tags it is quoted inside.
  */
-function inert(text: string): string {
+export function inert(text: string): string {
   return text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 

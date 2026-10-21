@@ -4,7 +4,7 @@
 // The list lives in one JSON file per project, shared with the pi extension.
 
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, UiOpenResult } from 'claude-code'
 
 import type { FeedbackState, InboxState } from '../types'
 import {
@@ -25,6 +25,7 @@ import {
   flagResultText,
   inboxDir,
   inboxPath,
+  inert,
   modelSummary,
   openDigest,
   openItems,
@@ -185,8 +186,38 @@ async function reopenFromPane($: $, n: number): Promise<void> {
   await say($, { text: r.ok ? `#${n} reopened.` : resolveResultText(r), isError: !r.ok })
 }
 
-async function openPane($: $): Promise<void> {
-  await $.ui.open({ ...PANE_OPEN, focus: true, closeOnEscape: true })
+async function openPane($: $): Promise<UiOpenResult> {
+  return $.ui.open({ ...PANE_OPEN, focus: true, closeOnEscape: true })
+}
+
+/** Blocking items first, then in the order they were flagged. */
+function urgentFirst(a: Item, b: Item): number {
+  return Number(b.blocking) - Number(a.blocking) || a.n - b.n
+}
+
+/**
+ * `/inbox list`: the open items as markdown, for wherever the pane is out of
+ * sight (a phone or browser over Remote Control). The model reads command
+ * output too, so item text is quoted inert, as in its own note.
+ */
+function inboxMarkdown(inbox: Inbox): string {
+  const open = openItems(inbox).sort(urgentFirst)
+  const [first] = open
+  if (first === undefined) return 'Nothing waiting on you.'
+  const blocking = open.filter(i => i.blocking).length
+  // Two trailing spaces break a line inside an item's paragraph.
+  const items = open.map(i =>
+    [
+      `**#${i.n}${i.blocking ? ' ⚠' : ''} ${inert(i.title)}**`,
+      `${KIND_LABEL[i.kind]} · from ${inert(i.source)} · ${ago(i.createdAt)}`,
+      ...(i.detail ? [inert(i.detail.split('\n')[0] ?? '')] : []),
+    ].join('  \n'),
+  )
+  return [
+    `**${open.length} waiting on you**${blocking > 0 ? ` · ${blocking} blocking` : ''}`,
+    ...items,
+    `\`/done ${first.n}\` closes it · \`/inbox drop ${first.n}\` drops it · \`/explain ${first.n}\` asks for the steps`,
+  ].join('\n\n')
 }
 
 /**
@@ -265,8 +296,8 @@ export const register: Register = on => {
     })
     await $.command.register({
       name: 'inbox',
-      description: 'What agents are waiting on you for (pane, or add/done/drop/reopen/explain N)',
-      argumentHint: '[add <text> | done N | drop N | reopen N | explain N]',
+      description: 'What agents are waiting on you for (pane, or list/add/done/drop/reopen/explain N)',
+      argumentHint: '[list | add <text> | done N | drop N | reopen N | explain N]',
       immediate: true,
     })
     await $.command.register({
@@ -346,16 +377,25 @@ export const register: Register = on => {
     const args = e.args.trim()
     if (!args) {
       await load($)
-      await openPane($)
+      const opened = await openPane($)
+      if (!opened.isPlaced) {
+        return { text: `The pane can't show here (${opened.reason}). Run \`/inbox list\` to see the items as text.` }
+      }
+      // Over Remote Control the pane opens on the CLI's terminal, out of the
+      // sight of the phone, browser or desktop that asked.
+      if (e.origin.kind === 'bridge') {
+        return { text: "Inbox opened on the CLI's terminal. Run `/inbox list` to see the items here." }
+      }
       return { text: 'Inbox opened.' }
     }
     const [verb = '', ...rest] = args.split(/\s+/)
+    if (verb === 'list') return { text: inboxMarkdown(await load($)) }
     if (verb === 'explain') return { text: await explain($, rest.join(' ')) }
     if (verb === 'add' || verb === 'done' || verb === 'drop' || verb === 'reopen') {
       return { text: await runVerb($, verb, rest.join(' ')) }
     }
     if (/^#?\d/.test(verb)) return { text: await runVerb($, 'done', args) }
-    return { text: 'Usage: /inbox [add <text> | done N | drop N | reopen N | explain N]' }
+    return { text: 'Usage: /inbox [list | add <text> | done N | drop N | reopen N | explain N]' }
   })
 
   on('command.run', { command: 'explain' }, async ($, e) => ({ text: await explain($, e.args) }))
@@ -420,7 +460,7 @@ export const register: Register = on => {
     const inbox = ((await read($, inboxAtom)) as Inbox | null) ?? emptyInbox(mem.project)
     const feedback = (await read($, feedbackAtom)) as FeedbackState | null
     const isClosedShown = await read($, closedShownAtom)
-    const open = openItems(inbox).sort((a, b) => Number(b.blocking) - Number(a.blocking) || a.n - b.n)
+    const open = openItems(inbox).sort(urgentFirst)
     const closed = inbox.items
       .filter(i => i.status !== 'open')
       .sort((a, b) => (b.closedAt ?? '').localeCompare(a.closedAt ?? ''))
