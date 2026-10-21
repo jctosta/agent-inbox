@@ -2,6 +2,8 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
+import { projectSlug } from '../core/inbox'
+
 const ROOT = '/home/carlos/Dev/healthforge'
 const FLAG = 'mcp__agent-inbox__flag_for_user'
 const RESOLVE = 'mcp__agent-inbox__resolve_user_item'
@@ -211,4 +213,12 @@ test('a session started below the git root shares the root\'s list', async ($, o
   expect(inboxFiles.length).toBe(1)
   expect(inboxFiles[0]?.includes('/.agent-inbox/healthforge-')).toBe(true)
   expect(JSON.parse(files.get(inboxFiles[0] ?? '') ?? '{}').project).toBe(ROOT)
+})
+
+test('titles in other scripts are told apart when deduping', async ($, on) => {
+  world(on)
+  await start($)
+  await $.tool.call({ tool: FLAG, title: '设置密钥' })
+  const second = await $.tool.call({ tool: FLAG, title: '审核代码' })
+  expect(second.result).toContain('#2')
 })

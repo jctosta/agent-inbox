@@ -180,7 +180,7 @@ export function openDigest(inbox: Inbox): string {
 }
 
 function normalize(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 }
 
 // ---------------------------------------------------------------- changes
