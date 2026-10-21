@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
-import type { On } from 'claude-code'
+import type { On, RenderSurface } from 'claude-code'
 
 import { projectSlug } from '../core/inbox'
 
@@ -37,7 +37,12 @@ const PANE = {
 } as const
 
 /** The engine beneath the plugin: an in-memory disk and the session's calls. */
-function world(on: On, files = new Map<string, string>(), root = ROOT) {
+function world(
+  on: On,
+  files = new Map<string, string>(),
+  root = ROOT,
+  surfaces: RenderSurface[] = ['terminal'],
+) {
   let tick = 1
   const mtimes = new Map<string, number>()
   const write = (path: string, text: string) => {
@@ -52,7 +57,13 @@ function world(on: On, files = new Map<string, string>(), root = ROOT) {
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('tool.register', (_, e) => ({ value: { tool: `mcp__agent-inbox__${e.name}` } }))
   on('command.register', (_, e) => ({ value: { command: e.name } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.surfaces', () => ({ value: surfaces }))
+  on('session.attach', (_, e) => ({ clientId: e.clientId }))
+  const opened: string[] = []
+  on('ui.open', (_, e) => {
+    opened.push(e.id)
+    return { value: { isPlaced: true } }
+  })
   on('fs.exists', (_, e) => ({ value: files.has(e.path) }))
   on('fs.read', (_, e) => ({ value: files.get(e.path) ?? '' }))
   on('fs.write', (_, e) => {
@@ -62,7 +73,11 @@ function world(on: On, files = new Map<string, string>(), root = ROOT) {
   on('fs.stat', (_, e) => ({
     value: { kind: 'file', size: files.get(e.path)?.length ?? 0, mtimeMs: mtimes.get(e.path) ?? 0, isLink: false },
   }))
-  on('prompt.submit', (_, e) => ({ text: e.text, context: e.context }))
+  const submitted: string[] = []
+  on('prompt.submit', (_, e) => {
+    submitted.push(e.text)
+    return { text: e.text, context: e.context }
+  })
   const toasts: string[] = []
   on('ui.toast', (_, e) => {
     toasts.push(e.text)
@@ -73,7 +88,7 @@ function world(on: On, files = new Map<string, string>(), root = ROOT) {
     const { Text } = $.ui.resolve(e)
     return <Text>engine</Text>
   })
-  return { files, clock, write, toasts }
+  return { files, clock, write, toasts, opened, submitted, surfaces }
 }
 
 const start = ($: Engine) =>
@@ -231,4 +246,43 @@ test('a damaged inbox file is left alone, not written over', async ($, on) => {
   const r = await $.tool.call({ tool: FLAG, title: 'Renew the domain' })
   expect(r.result).toContain('not valid JSON')
   expect(files.get(path)).toBe(damaged)
+})
+
+test('/explain asks the agent to spell out what an item needs', async ($, on) => {
+  const { submitted, clock } = world(on)
+  await start($)
+  await $.tool.call({ tool: FLAG, title: 'Approve the migration plan', detail: 'See docs/plan.md' })
+  await cmd($, 'explain', '1')
+  await clock.advance(1)
+  const asked = submitted.find(t => t.includes('#1')) ?? ''
+  expect(asked).toContain('Approve the migration plan')
+  expect(asked).toContain('See docs/plan.md')
+  const missing = await cmd($, 'inbox', 'explain 9')
+  expect(missing.text).toContain('no item #9')
+})
+
+test('on a desktop the pane opens by itself when an item arrives', async ($, on) => {
+  const { opened } = world(on, undefined, ROOT, ['terminal', 'desktop'])
+  await start($)
+  expect(opened).toEqual([])
+  await $.tool.call({ tool: FLAG, title: 'Sign the DPA' })
+  expect(opened).toEqual(['agent-inbox'])
+  await $.tool.call({ tool: FLAG, title: 'Sign the DPA' })
+  expect(opened).toEqual(['agent-inbox'])
+})
+
+test('a terminal alone keeps the band and opens no pane', async ($, on) => {
+  const { opened } = world(on)
+  await start($)
+  await $.tool.call({ tool: FLAG, title: 'Sign the DPA' })
+  expect(opened).toEqual([])
+})
+
+test('a desktop that attaches later gets the pane', async ($, on) => {
+  const { opened, surfaces } = world(on)
+  await start($)
+  await $.tool.call({ tool: FLAG, title: 'Sign the DPA' })
+  surfaces.push('desktop')
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })
+  expect(opened).toEqual(['agent-inbox'])
 })

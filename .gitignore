@@ -2,3 +2,4 @@ node_modules/
 .claude-plugin/types/
 *.tmp
 package-lock.json
+tsconfig.json

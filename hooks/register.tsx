@@ -19,6 +19,8 @@ import {
   closeItem,
   damagedFileError,
   emptyInbox,
+  explainPrompt,
+  findItem,
   findProjectRoot,
   flagResultText,
   inboxDir,
@@ -35,6 +37,7 @@ import {
 import type { AddResult, CloseResult, Inbox, Item } from '../core/inbox'
 
 const PANE = 'agent-inbox'
+const PANE_TITLE = 'Waiting on you'
 const SOURCE = 'claude-code'
 const POLL_MS = 3000
 const FLAG_TOOL = 'mcp__agent-inbox__flag_for_user'
@@ -54,7 +57,16 @@ const mem: {
   lastContextDigest: string | undefined
   /** Set while the file does not parse: then nothing writes over it. */
   damage: string | undefined
-} = { path: undefined, project: '', lastMtime: -1, lastContextDigest: undefined, damage: undefined }
+  /** The newest open item number the desktop pane was put up for. */
+  newestShown: number
+} = {
+  path: undefined,
+  project: '',
+  lastMtime: -1,
+  lastContextDigest: undefined,
+  damage: undefined,
+  newestShown: 0,
+}
 
 // ------------------------------------------------------------------ file I/O
 
@@ -84,6 +96,7 @@ async function readInbox($: $): Promise<Inbox> {
 async function load($: $): Promise<Inbox> {
   const inbox = await readInbox($)
   await update($, inboxAtom, () => inbox as InboxState)
+  await showNewItems($, inbox)
   return inbox
 }
 
@@ -102,6 +115,7 @@ async function mutate<R extends { inbox: Inbox; ok: boolean }>(
     mem.lastMtime = (await $.fs.stat(file)).mtimeMs
   }
   await update($, inboxAtom, () => result.inbox as InboxState)
+  await showNewItems($, result.inbox)
   return result
 }
 
@@ -140,7 +154,36 @@ async function say($: $, text: string): Promise<void> {
 }
 
 async function openPane($: $): Promise<void> {
-  await $.ui.open({ id: PANE, title: 'Waiting on you', focus: true, closeOnEscape: true })
+  await $.ui.open({ id: PANE, title: PANE_TITLE, focus: true, closeOnEscape: true })
+}
+
+/**
+ * A desktop has no band that stays put the way the terminal's does, so there
+ * the pane comes up by itself whenever an item arrives it has not shown yet.
+ * The terminal keeps the band alone; a pane the person closed stays closed
+ * until the next new item.
+ */
+async function showNewItems($: $, inbox: Inbox): Promise<void> {
+  const newest = Math.max(0, ...openItems(inbox).map(i => i.n))
+  if (newest <= mem.newestShown) return
+  mem.newestShown = newest
+  if ((await $.session.surfaces()).includes('desktop')) await $.ui.open({ id: PANE, title: PANE_TITLE })
+}
+
+/** `/explain 3`: a turn in which the agent spells out what #3 needs from the human. */
+async function explain($: $, args: string): Promise<string | undefined> {
+  const [n] = parseNumbers(args)
+  if (n === undefined) return 'Usage: /explain N'
+  const item = findItem(await load($), n)
+  if (!item) return `Not explained: no item #${n}.`
+  // A command.run hook may not submit (the turn would wait on the hook), so
+  // the prompt goes out on a timer of its own, once the command is done.
+  $.clock.after(0, () => {
+    void $.prompt.submit({ text: explainPrompt(item), asUser: true }).catch((err: unknown) =>
+      $.ui.toast(`Could not ask about #${n}: ${err instanceof Error ? err.message : String(err)}`),
+    )
+  })
+  return undefined
 }
 
 async function pollFile($: $): Promise<void> {
@@ -190,9 +233,14 @@ export const register: Register = on => {
     })
     await $.command.register({
       name: 'inbox',
-      description: 'What agents are waiting on you for (pane, or add/done/drop/reopen N)',
-      argumentHint: '[add <text> | done N | drop N | reopen N]',
+      description: 'What agents are waiting on you for (pane, or add/done/drop/reopen/explain N)',
+      argumentHint: '[add <text> | done N | drop N | reopen N | explain N]',
       immediate: true,
+    })
+    await $.command.register({
+      name: 'explain',
+      description: 'Have the agent explain what an inbox item needs from you: /explain 3',
+      argumentHint: 'N',
     })
     await $.command.register({
       name: 'done',
@@ -208,6 +256,16 @@ export const register: Register = on => {
     })
 
     return next(e)
+  })
+
+  // A desktop that joins after an item arrived gets the pane too.
+  on('session.attach', async ($, e, next) => {
+    const r = await next(e)
+    const inbox = (await read($, inboxAtom)) as Inbox | null
+    if (e.surface === 'desktop' && inbox && openItems(inbox).length > 0) {
+      await $.ui.open({ id: PANE, title: PANE_TITLE })
+    }
+    return r
   })
 
   // /clear, /resume and /branch reset $.state: put the inbox back.
@@ -260,12 +318,15 @@ export const register: Register = on => {
       return { text: 'Inbox opened.' }
     }
     const [verb = '', ...rest] = args.split(/\s+/)
+    if (verb === 'explain') return { text: await explain($, rest.join(' ')) }
     if (verb === 'add' || verb === 'done' || verb === 'drop' || verb === 'reopen') {
       return { text: await runVerb($, verb, rest.join(' ')) }
     }
     if (/^#?\d/.test(verb)) return { text: await runVerb($, 'done', args) }
-    return { text: 'Usage: /inbox [add <text> | done N | drop N | reopen N]' }
+    return { text: 'Usage: /inbox [add <text> | done N | drop N | reopen N | explain N]' }
   })
+
+  on('command.run', { command: 'explain' }, async ($, e) => ({ text: await explain($, e.args) }))
 
   on('command.run', { command: 'done' }, async ($, e) => ({
     text: await runVerb($, 'done', e.args),
@@ -358,6 +419,12 @@ export const register: Register = on => {
                 onPress={() =>
                   void close($, item.n, 'done', 'you').then(r => say($, resolveResultText(r)))
                 }
+              />
+              <Text> </Text>
+              <Button
+                key={`pane-explain-${item.id}`}
+                label="Explain"
+                onPress={() => void explain($, String(item.n))}
               />
               <Text> </Text>
               <Button

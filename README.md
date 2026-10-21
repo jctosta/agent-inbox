@@ -23,13 +23,14 @@ There is one list per project, shared by **Claude Code** (as a mod) and **pi** (
 
 | Command | What it does |
 | --- | --- |
-| `/inbox` | Claude Code: opens the pane, with Done/Drop buttons, an Add field and recently closed items with Reopen. pi: lets you pick an item, then Done or Drop. |
+| `/inbox` | Claude Code: opens the pane, with Done/Explain/Drop buttons, an Add field and recently closed items with Reopen. pi: lets you pick an item, then Done, Drop or Explain. |
 | `/done 3` or `/done 3 4` | Mark items done. |
 | `/inbox drop 3` | Close an item as no longer needed. |
 | `/inbox reopen 3` | Bring a closed item back. |
 | `/inbox add <text>` | Add an item yourself. |
+| `/explain 3` or `/inbox explain 3` | Ask the agent to spell out what item #3 needs from you: why, the exact steps, and how you'll know it's done. |
 
-In Claude Code the band's `✓` closes an item with one click. Use `ctrl+x tab` to focus the band from the keyboard. In pi the list is a widget above the editor, with a `⚑ N` count in the footer.
+In Claude Code the band's `✓` closes an item with one click. Use `ctrl+x tab` to focus the band from the keyboard. When Claude Code Desktop is attached to the session, the pane also opens by itself whenever a new item arrives, since the desktop has room to keep it beside the conversation. In pi the list is a widget above the editor, with a `⚑ N` count in the footer.
 
 ## Install
 

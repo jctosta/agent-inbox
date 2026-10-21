@@ -5,7 +5,8 @@
  *
  * - Tools: flag_for_user, resolve_user_item (same names and contract as Claude Code)
  * - Widget above the editor while anything is open, plus a footer status
- * - /inbox (pick an item to close), /inbox add|done|drop|reopen N, /done N
+ * - /inbox (pick an item to close or explain), /inbox add|done|drop|reopen|explain N,
+ *   /done N, /explain N
  * - Open items are sent to the model (hidden) only when the list changed
  */
 
@@ -28,6 +29,8 @@ import {
 	addItem,
 	closeItem,
 	damagedFileError,
+	explainPrompt,
+	findItem,
 	findProjectRoot,
 	flagResultText,
 	inboxDir,
@@ -275,6 +278,16 @@ export default function agentInbox(pi: ExtensionAPI) {
 		else console.log(text);
 	};
 
+	/** `/explain 3`: a turn in which the agent spells out what #3 needs from the human. */
+	const explain = (ctx: ExtensionContext, args: string) => {
+		reload();
+		const [n] = parseNumbers(args);
+		if (n === undefined) return tell(ctx, "Usage: /explain N");
+		const item = inbox && findItem(inbox, n);
+		if (!item) return tell(ctx, `Not explained: no item #${n}.`);
+		pi.sendUserMessage(explainPrompt(item), { deliverAs: "followUp" });
+	};
+
 	/** No arguments: pick an open item, then what to do with it. */
 	const browse = async (ctx: ExtensionContext) => {
 		reload();
@@ -288,9 +301,10 @@ export default function agentInbox(pi: ExtensionAPI) {
 		const info = [item.detail, `from ${item.source} · ${item.createdAt.slice(0, 16).replace("T", " ")}`]
 			.filter(Boolean)
 			.join("\n");
-		const action = await ctx.ui.select(`#${item.n} ${item.title}\n${info}`, ["Done", "Drop", "Back"]);
+		const action = await ctx.ui.select(`#${item.n} ${item.title}\n${info}`, ["Done", "Drop", "Explain", "Back"]);
 		if (action === "Done") tell(ctx, resolveResultText(close(item.n, "done", "you")));
 		else if (action === "Drop") tell(ctx, resolveResultText(close(item.n, "dropped", "you")));
+		else if (action === "Explain") explain(ctx, String(item.n));
 	};
 
 	const completions = (prefix: string) => {
@@ -301,15 +315,25 @@ export default function agentInbox(pi: ExtensionAPI) {
 	};
 
 	pi.registerCommand("inbox", {
-		description: "What agents are waiting on you for (pick one, or add/done/drop/reopen N)",
+		description: "What agents are waiting on you for (pick one, or add/done/drop/reopen/explain N)",
 		handler: async (args, ctx) => {
 			await resolvePath(ctx.cwd);
 			const trimmed = args.trim();
 			if (!trimmed) return browse(ctx);
 			const [verb = "", ...rest] = trimmed.split(/\s+/);
+			if (verb === "explain") return explain(ctx, rest.join(" "));
 			if (["add", "done", "drop", "reopen"].includes(verb)) return tell(ctx, runVerb(verb, rest.join(" ")));
 			if (/^#?\d/.test(verb)) return tell(ctx, runVerb("done", trimmed));
-			tell(ctx, "Usage: /inbox [add <text> | done N | drop N | reopen N]");
+			tell(ctx, "Usage: /inbox [add <text> | done N | drop N | reopen N | explain N]");
+		},
+	});
+
+	pi.registerCommand("explain", {
+		description: "Have the agent explain what an inbox item needs from you: /explain 3",
+		getArgumentCompletions: completions,
+		handler: async (args, ctx) => {
+			await resolvePath(ctx.cwd);
+			explain(ctx, args);
 		},
 	});
 

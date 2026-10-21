@@ -320,6 +320,19 @@ export function modelSummary(inbox: Inbox): string {
   ].join('\n')
 }
 
+/** The prompt `/explain N` sends: the agent spells out what the item needs. */
+export function explainPrompt(i: Item): string {
+  const about = [i.kind, `flagged by ${i.source}`, i.blocking ? 'blocking' : '', i.status === 'open' ? '' : i.status]
+    .filter(Boolean)
+    .join(', ')
+  return [
+    `Explain item #${i.n} in my agent inbox in more detail: "${i.title}" (${about}).`,
+    ...(i.detail ? [`Its detail: ${i.detail}`] : []),
+    'Tell me exactly what you need from me: why it is needed, the concrete steps (commands, file paths, values and where to find them) and how we will know it is done.',
+    'Look things up in the project if that makes the answer concrete. Do not do the item yourself and do not resolve it.',
+  ].join('\n')
+}
+
 /** Parses "3", "#3", "3 4", "3,4" into numbers. */
 export function parseNumbers(args: string): number[] {
   return (args.match(/\d+/g) ?? []).map(Number).filter(n => n > 0)

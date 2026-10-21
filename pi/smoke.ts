@@ -55,6 +55,10 @@ faux.setResponses([
 		});
 	},
 	fauxAssistantMessage([fauxText("Closed #1.")]),
+	(context) => {
+		seen.push(JSON.stringify(context.messages));
+		return fauxAssistantMessage("Open docs/migrations and approve it.");
+	},
 ]);
 
 const modelRuntime = await ModelRuntime.create({
@@ -128,13 +132,19 @@ try {
 	assert.equal(json.items.find((i: { n: number }) => i.n === 1).status, "done");
 	assert.equal(json.items.find((i: { n: number }) => i.n === 1).note, "key is set");
 
-	// 4. The human's /done closes the other one.
+	// 4. /explain asks the model to spell out an item.
+	seen.length = 0;
+	await session.prompt("/explain 2");
+	await session.waitForIdle();
+	assert.ok(seen.join("\n").includes('Explain item #2 in my agent inbox in more detail: \\"Approve the DB migration\\"'));
+
+	// 5. The human's /done closes the other one.
 	await session.prompt("/done 2");
 	({ json } = readInbox());
 	assert.equal(json.items.find((i: { n: number }) => i.n === 2).status, "done");
 	assert.equal(json.items.find((i: { n: number }) => i.n === 2).closedBy, "you");
 
-	// 5. A damaged file is left alone, not written over with an empty list.
+	// 6. A damaged file is left alone, not written over with an empty list.
 	const damaged = readFileSync(file, "utf8").slice(0, 80);
 	writeFileSync(file, damaged);
 	await session.prompt("/inbox add Renew the domain");
