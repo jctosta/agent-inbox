@@ -179,7 +179,7 @@ async function explain($: $, args: string): Promise<string | undefined> {
   // A command.run hook may not submit (the turn would wait on the hook), so
   // the prompt goes out on a timer of its own, once the command is done.
   $.clock.after(0, () => {
-    void $.prompt.submit({ text: explainPrompt(item), asUser: true }).catch((err: unknown) =>
+    void $.prompt.submit({ text: explainPrompt(item) }).catch((err: unknown) =>
       $.ui.toast(`Could not ask about #${n}: ${err instanceof Error ? err.message : String(err)}`),
     )
   })

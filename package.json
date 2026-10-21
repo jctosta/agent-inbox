@@ -1,6 +1,6 @@
 {
   "name": "agent-inbox",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A persistent inbox of things coding agents are waiting on you for. One list per project, shared by Claude Code (a mod) and pi (an extension).",
   "type": "module",
   "private": true,

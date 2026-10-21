@@ -136,7 +136,9 @@ try {
 	seen.length = 0;
 	await session.prompt("/explain 2");
 	await session.waitForIdle();
-	assert.ok(seen.join("\n").includes('Explain item #2 in my agent inbox in more detail: \\"Approve the DB migration\\"'));
+	const explained = seen.join("\n");
+	assert.ok(explained.includes("Explain item #2 in my agent inbox"), "the explain prompt reached the model");
+	assert.ok(explained.includes("#2 [decision] Approve the DB migration"), "with the item quoted");
 
 	// 5. The human's /done closes the other one.
 	await session.prompt("/done 2");
