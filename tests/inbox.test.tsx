@@ -60,8 +60,10 @@ function world(
   on('session.surfaces', () => ({ value: surfaces }))
   on('session.attach', (_, e) => ({ clientId: e.clientId }))
   const opened: string[] = []
+  const widths: (number | undefined)[] = []
   on('ui.open', (_, e) => {
     opened.push(e.id)
+    widths.push(e.columns)
     return { value: { isPlaced: true } }
   })
   on('fs.exists', (_, e) => ({ value: files.has(e.path) }))
@@ -90,7 +92,7 @@ function world(
     const { Text } = $.ui.resolve(e)
     return <Text>engine</Text>
   })
-  return { files, clock, write, toasts, opened, submitted, submittedAsUser, surfaces }
+  return { files, clock, write, toasts, opened, widths, submitted, submittedAsUser, surfaces }
 }
 
 const start = ($: Engine) =>
@@ -212,13 +214,46 @@ test('a change another agent writes to the file shows up', async ($, on) => {
   w.write(path, JSON.stringify(json))
   await w.clock.advance(3500)
 
+  for (const surface of ['terminal', 'mobile'] as const) {
+    const other = await $.ui.mount({ ...PANE, surface })
+    expect(await other.find({ type: 'Text', text: /2 open/ })).toBeDefined()
+    await other.unmount()
+  }
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await ui.find({ type: 'Text', text: /2 waiting on you/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /2 open/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /from pi/ })).toBeDefined()
   await ui.press({ key: 'pane-done-from-pi' })
   expect(await ui.find({ type: 'Text', text: /#2 marked done/ })).toBeDefined()
   await ui.input({ key: 'pane-add', text: 'Book the dentist' })
   expect(await ui.find({ type: 'Text', text: /Added #3/ })).toBeDefined()
+  await w.clock.advance(5000)
+  expect(await ui.find({ type: 'Text', text: /Added #3/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('the pane undoes a Done and reopens from the folded closed list', async ($, on) => {
+  const { files } = world(on)
+  await start($)
+  await $.tool.call({ tool: FLAG, title: 'Sign the DPA', blocking: true })
+  await $.tool.call({ tool: FLAG, title: 'Pick a bucket name' })
+  const id = (n: number) => onlyFile(files).json.items[n - 1].id
+  const status = (n: number) => onlyFile(files).json.items[n - 1].status
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /1 item blocks an agent/ })).toBeDefined()
+  expect(await ui.findAll({ type: 'Svg' })).toHaveLength(2)
+
+  await ui.press({ key: `pane-done-${id(1)}` })
+  expect(await ui.find({ type: 'Text', text: /blocks an agent/ })).toBeUndefined()
+  await ui.press({ key: 'pane-undo' })
+  expect(status(1)).toBe('open')
+
+  await ui.press({ key: `pane-drop-${id(2)}` })
+  expect(await ui.find({ type: 'Text', text: /1 closed/ })).toBeDefined()
+  expect(await ui.find({ key: `pane-reopen-${id(2)}` })).toBeUndefined()
+  await ui.press({ key: 'pane-closed-toggle' })
+  await ui.press({ key: `pane-reopen-${id(2)}` })
+  expect(status(2)).toBe('open')
   await ui.unmount()
 })
 
@@ -264,11 +299,12 @@ test('/explain asks the agent to spell out what an item needs', async ($, on) =>
 })
 
 test('on a desktop the pane opens by itself when an item arrives', async ($, on) => {
-  const { opened } = world(on, undefined, ROOT, ['terminal', 'desktop'])
+  const { opened, widths } = world(on, undefined, ROOT, ['terminal', 'desktop'])
   await start($)
   expect(opened).toEqual([])
   await $.tool.call({ tool: FLAG, title: 'Sign the DPA' })
   expect(opened).toEqual(['agent-inbox'])
+  expect(widths).toEqual([48])
   await $.tool.call({ tool: FLAG, title: 'Sign the DPA' })
   expect(opened).toEqual(['agent-inbox'])
 })

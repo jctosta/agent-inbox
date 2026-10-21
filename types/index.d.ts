@@ -23,6 +23,13 @@ export type InboxState = {
   items: InboxItemState[]
 }
 
+export type FeedbackState = {
+  text: string
+  isError: boolean
+  /** The item an Undo button reopens. */
+  undo?: number
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'agent-inbox': {
@@ -30,8 +37,10 @@ declare module 'claude-code' {
       inbox: InboxState | null
       /** Whether the band above the prompt is collapsed to its one-line form. */
       isCompact: boolean
-      /** One line of feedback shown in the pane after an action. */
-      message: string
+      /** One line of feedback at the top of the pane after an action; null when none. */
+      feedback: FeedbackState | null
+      /** Whether the pane lists recently closed items or folds them into one row. */
+      isClosedShown: boolean
     }
   }
 }

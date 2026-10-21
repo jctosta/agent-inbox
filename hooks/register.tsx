@@ -6,7 +6,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { InboxState } from '../types'
+import type { FeedbackState, InboxState } from '../types'
 import {
   FLAG_TOOL_DESCRIPTION,
   FLAG_TOOL_NAME,
@@ -34,18 +34,32 @@ import {
   resolveResultText,
   serializeInbox,
 } from '../core/inbox'
-import type { AddResult, CloseResult, Inbox, Item } from '../core/inbox'
+import type { AddResult, CloseResult, Inbox, Item, ItemKind } from '../core/inbox'
 
 const PANE = 'agent-inbox'
 const PANE_TITLE = 'Waiting on you'
+/** Every open asks for a narrow dock: a side panel, not half the window. */
+const PANE_OPEN = { id: PANE, title: PANE_TITLE, columns: 48 } as const
 const SOURCE = 'claude-code'
 const POLL_MS = 3000
+const MESSAGE_MS = 5000
+const CLOSED_SHOWN = 5
+
+/** Theme keys, so a chip follows the person's light or dark theme. */
+const KIND_COLOR: Record<ItemKind, string> = {
+  action: 'planMode',
+  decision: 'autoAccept',
+  review: 'ide',
+  secret: 'warning',
+  info: 'subtle',
+}
 const FLAG_TOOL = 'mcp__agent-inbox__flag_for_user'
 const RESOLVE_TOOL = 'mcp__agent-inbox__resolve_user_item'
 
 const inboxAtom = atom({ plugin: 'agent-inbox', key: 'inbox' } as const, null)
 const compactAtom = atom({ plugin: 'agent-inbox', key: 'isCompact' } as const, false)
-const messageAtom = atom({ plugin: 'agent-inbox', key: 'message' } as const, '')
+const feedbackAtom = atom({ plugin: 'agent-inbox', key: 'feedback' } as const, null)
+const closedShownAtom = atom({ plugin: 'agent-inbox', key: 'isClosedShown' } as const, false)
 
 type $ = EngineInterface
 
@@ -149,12 +163,30 @@ async function reopen($: $, n: number): Promise<CloseResult> {
   return mutate($, inbox => reopenItem(inbox, n))
 }
 
-async function say($: $, text: string): Promise<void> {
-  await update($, messageAtom, () => text)
+/** A line of feedback at the top of the pane, gone after a few seconds. */
+async function say($: $, feedback: FeedbackState): Promise<void> {
+  await update($, feedbackAtom, () => feedback)
+  $.clock.after(MESSAGE_MS, () => {
+    // $.state hands back copies, so the line is told apart by what it says.
+    void update($, feedbackAtom, shown =>
+      shown?.text === feedback.text && shown.undo === feedback.undo ? null : shown,
+    )
+  })
+}
+
+/** Done or Drop from the pane, said with an Undo that reopens the item. */
+async function closeFromPane($: $, n: number, status: 'done' | 'dropped'): Promise<void> {
+  const r = await close($, n, status, 'you')
+  await say($, { text: resolveResultText(r), isError: !r.ok, undo: r.ok ? n : undefined })
+}
+
+async function reopenFromPane($: $, n: number): Promise<void> {
+  const r = await reopen($, n)
+  await say($, { text: r.ok ? `#${n} reopened.` : resolveResultText(r), isError: !r.ok })
 }
 
 async function openPane($: $): Promise<void> {
-  await $.ui.open({ id: PANE, title: PANE_TITLE, focus: true, closeOnEscape: true })
+  await $.ui.open({ ...PANE_OPEN, focus: true, closeOnEscape: true })
 }
 
 /**
@@ -167,7 +199,7 @@ async function showNewItems($: $, inbox: Inbox): Promise<void> {
   const newest = Math.max(0, ...openItems(inbox).map(i => i.n))
   if (newest <= mem.newestShown) return
   mem.newestShown = newest
-  if ((await $.session.surfaces()).includes('desktop')) await $.ui.open({ id: PANE, title: PANE_TITLE })
+  if ((await $.session.surfaces()).includes('desktop')) await $.ui.open(PANE_OPEN)
 }
 
 /** `/explain 3`: a turn in which the agent spells out what #3 needs from the human. */
@@ -263,7 +295,7 @@ export const register: Register = on => {
     const r = await next(e)
     const inbox = (await read($, inboxAtom)) as Inbox | null
     if (e.surface === 'desktop' && inbox && openItems(inbox).length > 0) {
-      await $.ui.open({ id: PANE, title: PANE_TITLE })
+      await $.ui.open(PANE_OPEN)
     }
     return r
   })
@@ -386,124 +418,243 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const inbox = ((await read($, inboxAtom)) as Inbox | null) ?? emptyInbox(mem.project)
-    const message = await read($, messageAtom)
-    const open = openItems(inbox)
+    const feedback = (await read($, feedbackAtom)) as FeedbackState | null
+    const isClosedShown = await read($, closedShownAtom)
+    const open = openItems(inbox).sort((a, b) => Number(b.blocking) - Number(a.blocking) || a.n - b.n)
     const closed = inbox.items
       .filter(i => i.status !== 'open')
       .sort((a, b) => (b.closedAt ?? '').localeCompare(a.closedAt ?? ''))
-      .slice(0, 5)
+    const blocking = open.filter(i => i.blocking).length
     const { Box, Text, Button } = $.ui.resolve(e)
 
-    const rows = (
-      <Box flexDirection="column">
-        <Text bold>
-          {open.length === 0 ? 'Nothing waiting on you.' : `${open.length} waiting on you`}
-        </Text>
-        <Text dimColor wrap="truncate-middle">
-          {mem.project}
-        </Text>
-        {open.map(item => (
-          <Box key={`item-${item.id}`} flexDirection="column" marginTop={1}>
-            <Text color={item.blocking ? 'error' : undefined} bold>
-              #{item.n} {item.blocking ? '⚠ ' : ''}[{KIND_LABEL[item.kind]}] {item.title}
-            </Text>
-            {item.detail !== undefined && <Text dimColor>{item.detail}</Text>}
-            <Box flexDirection="row">
-              <Text dimColor>
-                from {item.source} · {ago(item.createdAt)}{'  '}
-              </Text>
-              <Button
-                key={`pane-done-${item.id}`}
-                label="Done"
-                variant="primary"
-                onPress={() =>
-                  void close($, item.n, 'done', 'you').then(r => say($, resolveResultText(r)))
-                }
-              />
-              <Text> </Text>
-              <Button
-                key={`pane-explain-${item.id}`}
-                label="Explain"
-                onPress={() => void explain($, String(item.n))}
-              />
-              <Text> </Text>
-              <Button
-                key={`pane-drop-${item.id}`}
-                label="Drop"
-                onPress={() =>
-                  void close($, item.n, 'dropped', 'you').then(r => say($, resolveResultText(r)))
-                }
-              />
-            </Box>
-          </Box>
-        ))}
-      </Box>
+    // Neither Text nor Box takes a corner radius, and a bordered Box is whole
+    // rows tall, so a rounded chip is a small SVG wherever a surface has Svg.
+    const chip = (item: Item) => {
+      if (e.surface === 'terminal') {
+        return (
+          <Text size="caption" color={KIND_COLOR[item.kind]}>
+            [{KIND_LABEL[item.kind]}]
+          </Text>
+        )
+      }
+      const { Svg } = $.ui.resolve(e)
+      const pill = chipSvg(item.kind)
+      return <Svg source={pill.source} alt={KIND_LABEL[item.kind]} width={pill.width} height={CHIP_HEIGHT} />
+    }
+
+    const header = (
+      <Text size="footnote" dimColor wrap="truncate-middle">
+        {basename(mem.project)}
+        {open.length > 0 ? ` · ${open.length} open` : ''}
+      </Text>
     )
 
-    const history =
-      closed.length === 0 ? null : (
-        <Box flexDirection="column" marginTop={1}>
-          <Text dimColor>Recently closed</Text>
-          {closed.map(item => (
-            <Box key={`closed-${item.id}`} flexDirection="row">
-              <Text dimColor strikethrough={item.status === 'done'}>
-                #{item.n} {item.title}
-              </Text>
-              <Text dimColor>
-                {' '}
-                ({item.status} by {item.closedBy ?? '?'}){' '}
-              </Text>
-              <Button
-                key={`pane-reopen-${item.id}`}
-                plain
-                dimColor
-                label="reopen"
-                onPress={() =>
-                  void reopen($, item.n).then(r =>
-                    say($, r.ok ? `#${item.n} reopened.` : resolveResultText(r)),
-                  )
-                }
-              />
-            </Box>
-          ))}
+    const said =
+      feedback === null ? null : (
+        <Box flexDirection="row" gap="sm" alignItems="center">
+          <Box flexGrow={1} flexShrink={1} minWidth={0}>
+            <Text size="footnote" color={feedback.isError ? 'warning' : 'success'}>
+              {feedback.isError ? '⚠' : '✓'} {feedback.text}
+            </Text>
+          </Box>
+          {feedback.undo !== undefined && (
+            <Button
+              key="pane-undo"
+              plain
+              label="Undo"
+              onPress={() => void reopenFromPane($, feedback.undo ?? 0)}
+            />
+          )}
         </Box>
       )
 
-    const footer = message === '' ? null : <Text color="success">{message}</Text>
-
-    if (e.surface === 'mobile') {
-      return (
-        <Box flexDirection="column">
-          {rows}
-          {history}
-          {footer}
+    const banner =
+      blocking === 0 ? null : (
+        // A round border in the banner's own color is what rounds its corners.
+        <Box
+          backgroundColor="diffRemovedDimmed"
+          borderStyle="round"
+          borderColor="diffRemovedDimmed"
+          paddingX={1}
+        >
+          <Text color="error">
+            ⚠ {blocking === 1 ? '1 item blocks an agent' : `${blocking} items block an agent`}
+          </Text>
         </Box>
+      )
+
+    const cards = open.map(item => (
+      <Box
+        key={`item-${item.id}`}
+        flexDirection="column"
+        gap="xs"
+        borderStyle="round"
+        borderColor={item.blocking ? 'error' : 'subtle'}
+        borderDimColor
+        paddingX={1}
+      >
+        <Box flexDirection="row" justifyContent="space-between" alignItems="center" gap="sm">
+          {chip(item)}
+          <Text size="caption" dimColor wrap="truncate-start">
+            #{item.n} · from {item.source} · {ago(item.createdAt)}
+          </Text>
+        </Box>
+        <Text weight="semibold">{item.title}</Text>
+        {item.detail !== undefined && (
+          <Text size="footnote" dimColor>
+            {item.detail}
+          </Text>
+        )}
+        <Box flexDirection="row" gap="sm" alignItems="center">
+          <Button
+            key={`pane-done-${item.id}`}
+            label="Done"
+            variant="primary"
+            onPress={() => void closeFromPane($, item.n, 'done')}
+          />
+          <Button
+            key={`pane-explain-${item.id}`}
+            label="Explain"
+            variant="secondary"
+            onPress={() => void explain($, String(item.n))}
+          />
+          <Box flexGrow={1} />
+          <Button
+            key={`pane-drop-${item.id}`}
+            plain
+            dimColor
+            label="Drop"
+            onPress={() => void closeFromPane($, item.n, 'dropped')}
+          />
+        </Box>
+      </Box>
+    ))
+
+    const empty =
+      open.length > 0 ? null : (
+        <Box flexDirection="row" gap="sm">
+          <Text size="heading" color="success">
+            ✓
+          </Text>
+          <Box flexDirection="column" flexShrink={1}>
+            <Text weight="semibold">Nothing waiting on you</Text>
+            <Text size="footnote" dimColor>
+              Agents add items here when they need something only you can do.
+            </Text>
+          </Box>
+        </Box>
+      )
+
+    // The mobile app draws no text field yet.
+    let add = null
+    if (e.surface !== 'mobile') {
+      const { Input } = $.ui.resolve(e)
+      add = (
+        <Input
+          key="pane-add"
+          placeholder="Add a reminder"
+          submitLabel="Add"
+          value=""
+          onSubmit={value =>
+            void flag($, { title: value }, 'you').then(r =>
+              say(
+                $,
+                r.ok
+                  ? { text: `Added #${r.item.n}.`, isError: false }
+                  : { text: `Not added: ${r.error}.`, isError: true },
+              ),
+            )
+          }
+        />
       )
     }
 
-    const { Input } = $.ui.resolve(e)
-    return (
-      <Box flexDirection="column">
-        {rows}
-        <Box marginTop={1}>
-          <Input
-            key="pane-add"
-            label="Add"
-            placeholder="Something you need to do here"
-            submitLabel="add"
-            value=""
-            onSubmit={value =>
-              void flag($, { title: value }, 'you').then(r =>
-                say($, r.ok ? `Added #${r.item.n}.` : `Not added: ${r.error}.`),
-              )
-            }
-          />
+    const history =
+      closed.length === 0 ? null : (
+        <Box flexDirection="column" gap="xs">
+          <Box flexDirection="row" gap="sm" alignItems="center">
+            <Box flexGrow={1}>
+              <Text size="footnote" dimColor={!isClosedShown} weight={isClosedShown ? 'semibold' : undefined}>
+                {closed.length} closed
+              </Text>
+            </Box>
+            <Button
+              key="pane-closed-toggle"
+              label={isClosedShown ? 'Hide' : 'Show'}
+              variant="secondary"
+              onPress={() => void update($, closedShownAtom, shown => !shown)}
+            />
+          </Box>
+          {isClosedShown &&
+            closed.slice(0, CLOSED_SHOWN).map(item => (
+              <Box key={`closed-${item.id}`} flexDirection="row" gap="sm" alignItems="center">
+                <Box flexGrow={1} flexShrink={1} minWidth={0}>
+                  <Text size="footnote" dimColor wrap="truncate-end">
+                    {item.status === 'done' ? '✓' : '✕'} #{item.n} {item.title}
+                  </Text>
+                </Box>
+                <Button
+                  key={`pane-reopen-${item.id}`}
+                  label="Reopen"
+                  variant="secondary"
+                  onPress={() => void reopenFromPane($, item.n)}
+                />
+              </Box>
+            ))}
+          {isClosedShown && closed.length > CLOSED_SHOWN && (
+            <Text size="caption" dimColor>
+              Shows the last {CLOSED_SHOWN}
+            </Text>
+          )}
         </Box>
+      )
+
+    return (
+      <Box flexDirection="column" gap="sm">
+        {header}
+        {said}
+        {banner}
+        {empty}
+        {cards}
+        {add}
         {history}
-        {footer}
       </Box>
     )
   })
+}
+
+const CHIP_HEIGHT = 18
+
+/** Light fill, dark text; and the reverse under a dark scheme. */
+const CHIP_PALETTE: Record<ItemKind, { light: [string, string]; dark: [string, string] }> = {
+  action: { light: ['#E1F5EE', '#085041'], dark: ['#085041', '#9FE1CB'] },
+  decision: { light: ['#EEEDFE', '#3C3489'], dark: ['#3C3489', '#CECBF6'] },
+  review: { light: ['#E6F1FB', '#0C447C'], dark: ['#0C447C', '#B5D4F4'] },
+  secret: { light: ['#FAEEDA', '#633806'], dark: ['#633806', '#FAC775'] },
+  info: { light: ['#F1EFE8', '#444441'], dark: ['#444441', '#D3D1C7'] },
+}
+
+/**
+ * A rounded, tinted kind chip. An SVG drawn as an image cannot read the
+ * theme's keys, so it carries both palettes and picks by color scheme.
+ */
+function chipSvg(kind: ItemKind): { source: string; width: number } {
+  const label = KIND_LABEL[kind]
+  // ponytail: width estimated from the label's length at 11px; fine for the five fixed labels.
+  const width = Math.round(label.length * 6.6 + 14)
+  const { light, dark } = CHIP_PALETTE[kind]
+  const source =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${CHIP_HEIGHT}" viewBox="0 0 ${width} ${CHIP_HEIGHT}">` +
+    `<style>rect{fill:${light[0]}}text{fill:${light[1]}}` +
+    `@media (prefers-color-scheme: dark){rect{fill:${dark[0]}}text{fill:${dark[1]}}}</style>` +
+    `<rect width="${width}" height="${CHIP_HEIGHT}" rx="5"/>` +
+    `<text x="${width / 2}" y="12.5" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="11" font-weight="500">${label}</text>` +
+    `</svg>`
+  return { source, width }
+}
+
+function basename(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path
 }
 
 function clip(text: string, width: number): string {
