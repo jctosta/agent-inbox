@@ -1,8 +1,16 @@
 {
   "name": "agent-inbox",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "A persistent inbox of things agents are waiting on you for: Claude flags them with flag_for_user, you see them above the prompt and clear them with /done.",
-  "author": { "name": "Carlos Tosta" },
+  "author": {
+    "name": "Carlos Tosta",
+    "url": "https://github.com/jctosta"
+  },
+  "homepage": "https://agent-inbox.jctosta.dev/",
+  "documentationUrl": "https://agent-inbox.jctosta.dev/",
+  "repository": "https://github.com/jctosta/agent-inbox",
+  "supportUrl": "https://github.com/jctosta/agent-inbox/issues",
+  "privacyPolicyUrl": "https://agent-inbox.jctosta.dev/privacy.html",
   "license": "MIT",
   "types": "./types/index.d.ts"
 }

@@ -3,3 +3,5 @@ node_modules/
 *.tmp
 package-lock.json
 tsconfig.json
+site/
+.claude/launch.json
