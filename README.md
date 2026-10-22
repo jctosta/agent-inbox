@@ -19,6 +19,17 @@ There is one list per project, shared by **Claude Code** (as a mod) and **pi** (
 - **Storage:** `~/.agent-inbox/<project>-<hash>.json`, where the project is the nearest git root above the session's directory. You can override the folder with `AGENT_INBOX_DIR`. The file is plain JSON, so other tools can read it too.
 - Each agent polls the file every 3 seconds, so changes from the other agent appear without a restart.
 
+## What it touches
+
+Everything the Claude Code mod reads, writes, sends or changes:
+
+- **Files:** it reads and writes one file, the project's inbox at `~/.agent-inbox/<project>-<hash>.json` (or in `AGENT_INBOX_DIR`). Besides `$HOME`, `USERPROFILE` and `AGENT_INBOX_DIR`, the only other thing it reads is whether a `.git` folder or file exists in the session's directory or above it, to find the project. It writes no other file, and never a build, start-up, settings or instructions file.
+- **Network and processes:** none. It makes no network calls and starts no programs.
+- **Tools:** it registers `flag_for_user` and `resolve_user_item` and answers their calls itself, since it is their implementation. It never answers, blocks or changes a call to any other tool.
+- **Commands:** it registers `/inbox`, `/done` and `/explain` and answers only those. It makes no permission decisions and leaves your permission mode, settings and Remote Control as you set them.
+- **Prompts it adds to:** its `prompt.submit` hook sees each prompt, yours or one another plugin submits. When the set of open items changed since Claude last heard, it adds one hidden `<user_inbox>` note beside the prompt listing each open item's number, kind, title, first line of detail and source. It never changes the prompt's text. After `/clear`, `/resume` or `/branch` (`SessionStart`), it reloads the inbox file so the note and the band come back.
+- **Prompts it submits:** `/explain N` and the pane's Explain button submit one prompt. It holds fixed instructions and item #N from the inbox file: number, kind, title, who flagged it, whether it blocks, its status and its detail, quoted as data. Nothing else from the conversation or your files goes into it.
+
 ## Commands (both agents)
 
 | Command | What it does |
@@ -73,6 +84,6 @@ npm run typecheck:pi
 
 ## Caveats
 
-- Mods and pi extensions run unsandboxed, with your permissions. This one only reads and writes its own JSON file under `~/.agent-inbox`. It makes no network calls and runs no processes.
+- Mods and pi extensions run unsandboxed, with your permissions. This one only touches what [What it touches](#what-it-touches) lists.
 - Claude Code's VS Code panel and `claude -p` run the tools but don't draw the band or the pane. Neither do the web, mobile or desktop apps when they connect to a CLI session over Remote Control: there, `/inbox` opens the pane on the CLI's terminal and points to `/inbox list`.
 - Writes are read-modify-write on a small file. pi writes atomically. Two agents closing items in the same instant could still race, but the file never ends up half-written from pi's side. If the file stops parsing (a bad hand edit, an interrupted write), neither agent writes over it: changes fail with a message naming the file until you fix or delete it.

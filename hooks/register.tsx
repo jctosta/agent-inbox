@@ -62,8 +62,6 @@ const compactAtom = atom({ plugin: 'agent-inbox', key: 'isCompact' } as const, f
 const feedbackAtom = atom({ plugin: 'agent-inbox', key: 'feedback' } as const, null)
 const closedShownAtom = atom({ plugin: 'agent-inbox', key: 'isClosedShown' } as const, false)
 
-type $ = EngineInterface
-
 // Module state: a reload starts a fresh environment, so this only caches.
 const mem: {
   path: string | undefined
@@ -85,7 +83,7 @@ const mem: {
 
 // ------------------------------------------------------------------ file I/O
 
-async function resolvePath($: $): Promise<string> {
+async function resolvePath($: EngineInterface): Promise<string> {
   if (mem.path) return mem.path
   const home = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')) ?? '.'
   const override = await $.env.get('AGENT_INBOX_DIR')
@@ -94,7 +92,7 @@ async function resolvePath($: $): Promise<string> {
   return mem.path
 }
 
-async function readInbox($: $): Promise<Inbox> {
+async function readInbox($: EngineInterface): Promise<Inbox> {
   const file = await resolvePath($)
   if (!(await $.fs.exists(file))) {
     mem.lastMtime = 0
@@ -108,7 +106,7 @@ async function readInbox($: $): Promise<Inbox> {
   return parseInbox(text, mem.project)
 }
 
-async function load($: $): Promise<Inbox> {
+async function load($: EngineInterface): Promise<Inbox> {
   const inbox = await readInbox($)
   await update($, inboxAtom, () => inbox as InboxState)
   await showNewItems($, inbox)
@@ -116,10 +114,9 @@ async function load($: $): Promise<Inbox> {
 }
 
 /** Re-read the file, apply `change`, write it back if it changed, publish. */
-async function mutate<R extends { inbox: Inbox; ok: boolean }>(
-  $: $,
-  change: (inbox: Inbox, now: string) => R,
-): Promise<R | { ok: false; inbox: Inbox; error: string }> {
+// The directory reads each use of $ line by line: keep $ on the line that
+// names the function it is passed to.
+async function mutate<R extends { inbox: Inbox; ok: boolean }>($: EngineInterface, change: (inbox: Inbox, now: string) => R): Promise<R | { ok: false; inbox: Inbox; error: string }> {
   const current = await readInbox($)
   if (mem.damage) return { ok: false, inbox: current, error: mem.damage }
   const now = new Date(await $.clock.now()).toISOString()
@@ -134,7 +131,7 @@ async function mutate<R extends { inbox: Inbox; ok: boolean }>(
   return result
 }
 
-async function flag($: $, input: Record<string, unknown>, source: string): Promise<AddResult> {
+async function flag($: EngineInterface, input: Record<string, unknown>, source: string): Promise<AddResult> {
   const id = crypto.randomUUID()
   return mutate($, (inbox, now) =>
     addItem(
@@ -150,22 +147,16 @@ async function flag($: $, input: Record<string, unknown>, source: string): Promi
   )
 }
 
-async function close(
-  $: $,
-  n: number,
-  status: 'done' | 'dropped',
-  by: string,
-  note?: string,
-): Promise<CloseResult> {
+async function close($: EngineInterface, n: number, status: 'done' | 'dropped', by: string, note?: string): Promise<CloseResult> {
   return mutate($, (inbox, now) => closeItem(inbox, n, status, { now, by, note }))
 }
 
-async function reopen($: $, n: number): Promise<CloseResult> {
+async function reopen($: EngineInterface, n: number): Promise<CloseResult> {
   return mutate($, inbox => reopenItem(inbox, n))
 }
 
 /** A line of feedback at the top of the pane, gone after a few seconds. */
-async function say($: $, feedback: FeedbackState): Promise<void> {
+async function say($: EngineInterface, feedback: FeedbackState): Promise<void> {
   await update($, feedbackAtom, () => feedback)
   $.clock.after(MESSAGE_MS, () => {
     // $.state hands back copies, so the line is told apart by what it says.
@@ -176,17 +167,17 @@ async function say($: $, feedback: FeedbackState): Promise<void> {
 }
 
 /** Done or Drop from the pane, said with an Undo that reopens the item. */
-async function closeFromPane($: $, n: number, status: 'done' | 'dropped'): Promise<void> {
+async function closeFromPane($: EngineInterface, n: number, status: 'done' | 'dropped'): Promise<void> {
   const r = await close($, n, status, 'you')
   await say($, { text: resolveResultText(r), isError: !r.ok, undo: r.ok ? n : undefined })
 }
 
-async function reopenFromPane($: $, n: number): Promise<void> {
+async function reopenFromPane($: EngineInterface, n: number): Promise<void> {
   const r = await reopen($, n)
   await say($, { text: r.ok ? `#${n} reopened.` : resolveResultText(r), isError: !r.ok })
 }
 
-async function openPane($: $): Promise<UiOpenResult> {
+async function openPane($: EngineInterface): Promise<UiOpenResult> {
   return $.ui.open({ ...PANE_OPEN, focus: true, closeOnEscape: true })
 }
 
@@ -226,7 +217,7 @@ function inboxMarkdown(inbox: Inbox): string {
  * The terminal keeps the band alone; a pane the person closed stays closed
  * until the next new item.
  */
-async function showNewItems($: $, inbox: Inbox): Promise<void> {
+async function showNewItems($: EngineInterface, inbox: Inbox): Promise<void> {
   const newest = Math.max(0, ...openItems(inbox).map(i => i.n))
   if (newest <= mem.newestShown) return
   mem.newestShown = newest
@@ -234,7 +225,7 @@ async function showNewItems($: $, inbox: Inbox): Promise<void> {
 }
 
 /** `/explain 3`: a turn in which the agent spells out what #3 needs from the human. */
-async function explain($: $, args: string): Promise<string | undefined> {
+async function explain($: EngineInterface, args: string): Promise<string | undefined> {
   const [n] = parseNumbers(args)
   if (n === undefined) return 'Usage: /explain N'
   const item = findItem(await load($), n)
@@ -249,7 +240,7 @@ async function explain($: $, args: string): Promise<string | undefined> {
   return undefined
 }
 
-async function pollFile($: $): Promise<void> {
+async function pollFile($: EngineInterface): Promise<void> {
   const file = await resolvePath($)
   const mtime = (await $.fs.exists(file)) ? (await $.fs.stat(file)).mtimeMs : 0
   const shown = await read($, inboxAtom)
@@ -257,7 +248,7 @@ async function pollFile($: $): Promise<void> {
 }
 
 /** `/done 3 4`, `/inbox drop 2`, `/inbox add ...`, `/inbox reopen 5`. */
-async function runVerb($: $, verb: string, rest: string): Promise<string> {
+async function runVerb($: EngineInterface, verb: string, rest: string): Promise<string> {
   if (verb === 'add') {
     const r = await flag($, { title: rest }, 'you')
     return r.ok ? `Added #${r.item.n}.` : `Not added: ${r.error}.`
@@ -597,12 +588,7 @@ export const register: Register = on => {
           value=""
           onSubmit={value =>
             void flag($, { title: value }, 'you').then(r =>
-              say(
-                $,
-                r.ok
-                  ? { text: `Added #${r.item.n}.`, isError: false }
-                  : { text: `Not added: ${r.error}.`, isError: true },
-              ),
+              say($, r.ok ? { text: `Added #${r.item.n}.`, isError: false } : { text: `Not added: ${r.error}.`, isError: true }),
             )
           }
         />
