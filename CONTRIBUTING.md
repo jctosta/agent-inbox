@@ -63,6 +63,7 @@ To keep your own inbox clean, set `AGENT_INBOX_DIR` to a scratch folder before y
 ## Rules for code
 
 - Put logic that both hosts use in `core/inbox.ts`. Keep host code in `hooks/register.tsx` (Claude Code) and `pi/index.ts` (pi).
+- Make a change for one host in the other host too. If the change cannot apply to the other host, tell why in the pull request.
 - Add a test for each change in behavior. Claude Code tests go in `tests/inbox.test.tsx`. pi checks go in `pi/smoke.ts`.
 - Commit readable source only. Do not commit compiled, minified or binary files.
 - In `hooks/register.tsx`, use `$` only as the hook's first parameter and in plain calls such as `$.fs.write(...)`. Do not declare a type or a variable with the name `$`. The Claude plugin directory refuses other uses.
