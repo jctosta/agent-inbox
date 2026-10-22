@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Validate and test
+    runs-on: ubuntu-latest
+    env:
+      # The Claude Code version the tests run against. The checks need no login.
+      CLAUDE_CODE_VERSION: 2.1.308
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      # No lockfile: one in the plugin folder holds the plugin for review in the Claude plugin directory.
+      - run: npm install --no-package-lock
+      - run: npm install --global "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+      - run: npm run validate
+      - run: npm test
+      - run: npm run typecheck:pi
