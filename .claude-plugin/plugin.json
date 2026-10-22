@@ -12,5 +12,6 @@
   "supportUrl": "https://github.com/jctosta/agent-inbox/issues",
   "privacyPolicyUrl": "https://agent-inbox.jctosta.dev/privacy.html",
   "license": "MIT",
+  "keywords": ["inbox", "tasks", "todo", "human-in-the-loop", "handoff", "reminders", "workflow", "pi"],
   "types": "./types/index.d.ts"
 }
