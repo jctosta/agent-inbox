@@ -1,0 +1,37 @@
+name: Feature
+description: Propose a change or a new feature.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Write in ASD-STE100 Simplified Technical English: active voice, short sentences, technical facts.
+        Start the title with a verb in the imperative, for example "Add support for OpenAI Codex".
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Tell what the change does and which problem it solves.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Give the steps of the change. Name the files and the hosts that it touches.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Tell what limits the change, for example a host limit or a rule of the Claude plugin directory.
+    validations:
+      required: false
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Give links to docs, issues or code.
+    validations:
+      required: false

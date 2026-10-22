@@ -82,6 +82,8 @@ npm run validate     # claude plugin validate .
 npm run typecheck:pi
 ```
 
+To contribute, read [CONTRIBUTING.md](CONTRIBUTING.md). To report a vulnerability, read [SECURITY.md](SECURITY.md).
+
 ## Caveats
 
 - Mods and pi extensions run unsandboxed, with your permissions. This one only touches what [What it touches](#what-it-touches) lists.

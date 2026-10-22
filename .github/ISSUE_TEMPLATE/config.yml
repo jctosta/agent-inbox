@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/jctosta/agent-inbox/security/advisories/new
+    about: Report security problems in private, not in a public issue.

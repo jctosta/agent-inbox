@@ -1,0 +1,62 @@
+name: Bug
+description: Tell us about a problem in agent-inbox.
+title: "Fix "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Write in ASD-STE100 Simplified Technical English: active voice, short sentences, one fact in each sentence.
+        Start the title with a verb in the imperative, for example "Fix the band height on narrow terminals".
+        For a vulnerability, do not use this form. Use private vulnerability reporting in the Security tab.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Tell what is wrong in one or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Give numbered steps. Start from a new session.
+      placeholder: |
+        1. Start Claude Code in a project.
+        2. Ask Claude to flag an item.
+        3. Type /done 1.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Include the error text, a screenshot or the inbox file if they help. Remove secrets first.
+    validations:
+      required: true
+  - type: dropdown
+    id: host
+    attributes:
+      label: Host
+      options:
+        - Claude Code, terminal
+        - Claude Code, desktop app
+        - Claude Code, over Remote Control
+        - Claude Code, VS Code
+        - pi
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: The host version and the agent-inbox version.
+      placeholder: Claude Code 2.1.307, agent-inbox 0.3.2
+    validations:
+      required: true
