@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy · agent-inbox</title>
+  <meta name="description" content="agent-inbox collects no data. It keeps one file for each project on your computer, and it does not use the network.">
+  <link rel="icon" href="assets/icon.png">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="wrap top">
+    <a class="brand" href="./"><img src="assets/icon.png" alt="">agent-inbox</a>
+    <nav>
+      <a href="./">Home</a>
+      <a href="https://github.com/jctosta/agent-inbox">GitHub</a>
+    </nav>
+  </header>
+
+  <main class="wrap prose">
+    <h1>Privacy policy</h1>
+    <p class="meta">Effective October 22, 2026</p>
+
+    <p>agent-inbox is a plugin for Claude Code and an extension for pi. It runs on your computer.</p>
+
+    <h2>Data that it collects</h2>
+    <p>It collects no data. It has no server, no account and no telemetry. The author, <a href="https://github.com/jctosta">Carlos Tosta</a>, gets no data about you or about how you use the plugin.</p>
+
+    <h2>Data that it keeps, and where</h2>
+    <p>It keeps one JSON file for each project on your computer: <code>~/.agent-inbox/&lt;project&gt;-&lt;hash&gt;.json</code>. If you set <code>AGENT_INBOX_DIR</code>, the file is in that folder.</p>
+    <p>The file contains the items that you or your coding agent write. Each item has a title, an optional detail, a kind and a blocking flag. It also has the name of the agent or person that added it, and the time when it opened. When an item closes, the file records the time, who closed it, and any note about why. The file also contains the path of the project.</p>
+    <p>Open items stay in the file until you close them. The plugin keeps the 50 most recent closed items, so that you can open them again. The plugin removes older closed items. To delete all the data, delete the file or the <code>~/.agent-inbox</code> folder.</p>
+
+    <h2>Data that it sends</h2>
+    <p>The plugin does not use the network, and it does not start programs. In your session, it gives your coding agent two types of text:</p>
+    <ul class="facts">
+      <li>When the open items change, it adds a short hidden note next to your next prompt. The note has the number, kind, title, first line of detail and source of each open item.</li>
+      <li>When you type <code>/explain</code> or click Explain, it sends one prompt that contains that item. The agent uses this prompt to explain what it needs from you.</li>
+    </ul>
+    <p>Your model provider gets this text with the rest of your conversation. The privacy terms of that provider apply. agent-inbox sends no data to other places.</p>
+
+    <h2>This website</h2>
+    <p>This website counts page views with <a href="https://www.goatcounter.com">GoatCounter</a>. GoatCounter sets no cookies and collects no personal data. For each view, it records the page, the referring site, the browser, the screen size and the country. It does not keep your IP address. This applies only to the website. The plugin collects no data.</p>
+
+    <h2>Children</h2>
+    <p>agent-inbox is a tool for developers. It is not for persons younger than 18.</p>
+
+    <h2>Changes</h2>
+    <p>If the plugin changes how it uses data, the author updates this page and its effective date. The <code>gh-pages</code> branch of the <a href="https://github.com/jctosta/agent-inbox">source repository</a> keeps the history of this page.</p>
+
+    <h2>Contact</h2>
+    <p>Send your questions to the <a href="https://github.com/jctosta/agent-inbox/issues">issue tracker</a>.</p>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>Made by <a href="https://github.com/jctosta">Carlos Tosta</a></span>
+      <span>MIT license</span>
+      <a href="https://github.com/jctosta/agent-inbox">Source</a>
+      <a href="https://github.com/jctosta/agent-inbox/issues">Support and issues</a>
+    </div>
+  </footer>
+  <script data-goatcounter="https://jctosta.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>

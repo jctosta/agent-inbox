@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>agent-inbox</title>
+  <meta name="description" content="agent-inbox keeps a list of what your coding agents need you to do. Claude adds an item. The item stays above your prompt until you close it.">
+  <link rel="icon" href="assets/icon.png">
+  <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="assets/vendor/asciinema-player-3.8.0/asciinema-player.css">
+</head>
+<body>
+  <header class="wrap top">
+    <a class="brand" href="./"><img src="assets/icon.png" alt="">agent-inbox</a>
+    <nav>
+      <a href="#how" class="hide-sm">How it works</a>
+      <a href="#commands" class="hide-sm">Commands</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="https://github.com/jctosta/agent-inbox">GitHub</a>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <div class="hero">
+      <h1>What your agents need you to do</h1>
+      <p class="lede">Sometimes your coding agent needs you to set a secret, make a decision, do a review or run a command. Claude adds an item to your inbox. The item stays above your prompt until you close it.</p>
+
+      <div class="install" data-tabs>
+        <div class="tabs" role="tablist">
+          <button role="tab" aria-selected="true" data-tab="cc">Claude Code</button>
+          <button role="tab" aria-selected="false" data-tab="shell">Shell</button>
+          <button role="tab" aria-selected="false" data-tab="pi">pi</button>
+        </div>
+        <div data-panel="cc">
+          <div class="cmd"><pre><code>/plugin install agent-inbox --marketplace jctosta/agent-inbox</code></pre><button class="copy">Copy</button></div>
+          <p class="note">Type this command at the prompt of a terminal session. In the desktop app, click + next to the prompt box, then click Plugins. Click Add marketplace and type <code>jctosta/agent-inbox</code>. Then click Add plugin.</p>
+        </div>
+        <div data-panel="shell" hidden>
+          <div class="cmd"><pre><code>claude plugin install agent-inbox --marketplace jctosta/agent-inbox</code></pre><button class="copy">Copy</button></div>
+          <p class="note">You must have Claude Code 2.1.287 or a later version.</p>
+        </div>
+        <div data-panel="pi" hidden>
+          <div class="cmd"><pre><code>pi install git:github.com/jctosta/agent-inbox</code></pre><button class="copy">Copy</button></div>
+          <p class="note">pi and Claude Code use the same list in the same project.</p>
+        </div>
+      </div>
+      <p class="credit">By <a href="https://github.com/jctosta">Carlos Tosta</a> · MIT license</p>
+    </div>
+
+    <section id="demo">
+      <h2>Demo</h2>
+      <p class="sub">A recording of a real Claude Code session in a terminal.</p>
+      <div class="demo">
+        <div class="chrome" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div id="player"></div>
+      </div>
+      <p class="demo-caption">Claude adds two items: the Stripe key and the plan review. The two items stay above the prompt. <code>/inbox list</code> shows the items and their details. <code>/done 1</code> closes item 1.</p>
+    </section>
+
+    <section id="how">
+      <h2>How it works</h2>
+      <p class="sub">Each project has one list in a small JSON file. All the agents in the project use this file.</p>
+      <ol class="steps">
+        <li><span class="n">1</span><div><strong>Claude adds an item</strong><span class="d">When Claude needs you to do something, it calls <code>flag_for_user</code>. The item has a title, a detail, a kind (do, decide, review, secret or note) and a blocking flag.</span></div></li>
+        <li><span class="n">2</span><div><strong>The item stays on screen</strong><span class="d">In the terminal, the item shows above the prompt. In the desktop app, it shows in a pane next to the conversation. It stays after new turns, after <code>/clear</code> and in new sessions.</span></div></li>
+        <li><span class="n">3</span><div><strong>You close the item</strong><span class="d">Type <code>/done 1</code>, or click ✓ above the prompt or Done in the pane. You can also tell Claude that the item is complete, and Claude closes it. To get the exact steps for item 1, type <code>/explain 1</code>.</span></div></li>
+      </ol>
+    </section>
+
+    <section id="where">
+      <h2>Where it shows</h2>
+      <p class="sub">The terminal, the desktop app, Remote Control and pi show the items from the same file.</p>
+      <div class="grid">
+        <div class="card"><h3>Terminal</h3><p>A band above the prompt shows the open items. Click ✓ to close an item. Click the open link to show the pane.</p></div>
+        <div class="card"><h3>Desktop app</h3><p>A pane next to the conversation opens when an item arrives. Each item has Done, Explain and Drop buttons. You can add an item, and Undo opens an item that you closed.</p></div>
+        <div class="card"><h3>Phone and web</h3><p>Over Remote Control, type <code>/inbox list</code>. The conversation then shows the open items and their details.</p></div>
+        <div class="card"><h3>pi</h3><p>A widget above the editor shows the items, and the footer shows a ⚑ count. pi uses the same file.</p></div>
+      </div>
+    </section>
+
+    <section id="commands">
+      <h2>Commands</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>/inbox</code></td><td>Opens the pane. In pi, it lists the items so that you can select one and choose Done, Drop or Explain.</td></tr>
+            <tr><td><code>/inbox list</code></td><td>Shows the open items and their details. Use it on a phone or in a browser over Remote Control.</td></tr>
+            <tr><td><code>/done 3</code></td><td>Closes item 3 as done. To close more items, type <code>/done 3 4</code>.</td></tr>
+            <tr><td><code>/inbox drop 3</code></td><td>Closes item 3 because it is not necessary.</td></tr>
+            <tr><td><code>/inbox reopen 3</code></td><td>Opens item 3 again.</td></tr>
+            <tr><td><code>/inbox add …</code></td><td>Adds an item that you write.</td></tr>
+            <tr><td><code>/explain 3</code></td><td>Asks Claude to explain item 3: why it is necessary, the exact steps, and how you know that it is complete.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="touches">
+      <h2>What it reads, writes and sends</h2>
+      <p class="sub">This list shows all that the plugin does on your computer.</p>
+      <ul class="facts">
+        <li>It writes one file for each project: <code>~/.agent-inbox/&lt;project&gt;-&lt;hash&gt;.json</code>. It writes no other files.</li>
+        <li>It does not use the network, and it does not start programs.</li>
+        <li>It has two tools: <code>flag_for_user</code> and <code>resolve_user_item</code>. It does not stop or change the calls to other tools.</li>
+        <li>When the open items change, it adds one hidden note next to your next prompt. The note tells Claude which items are open, and it goes to your model provider with the rest of the conversation. It does not change the text of your prompt.</li>
+        <li><code>/explain</code> sends Claude one prompt. The prompt contains only that item, and it tells Claude to read the item as a task description, not as instructions.</li>
+      </ul>
+      <p style="margin-top:16px"><a href="privacy.html">Privacy policy</a> · <a href="https://github.com/jctosta/agent-inbox#what-it-touches">The full list in the README</a></p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>Made by <a href="https://github.com/jctosta">Carlos Tosta</a></span>
+      <span>MIT license</span>
+      <a href="https://github.com/jctosta/agent-inbox">Source</a>
+      <a href="https://github.com/jctosta/agent-inbox/issues">Support and issues</a>
+      <a href="privacy.html">Privacy</a>
+    </div>
+  </footer>
+
+  <script src="assets/vendor/asciinema-player-3.8.0/asciinema-player.min.js"></script>
+  <script>
+    AsciinemaPlayer.create('assets/demo.cast', document.getElementById('player'), {
+      theme: 'inbox',
+      fit: 'width',
+      autoPlay: true,
+      loop: true,
+      idleTimeLimit: 1.2,
+      terminalFontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+    })
+
+    for (const box of document.querySelectorAll('[data-tabs]')) {
+      const tabs = box.querySelectorAll('[role="tab"]')
+      for (const tab of tabs) {
+        tab.addEventListener('click', () => {
+          for (const t of tabs) t.setAttribute('aria-selected', String(t === tab))
+          for (const p of box.querySelectorAll('[data-panel]')) p.hidden = p.dataset.panel !== tab.dataset.tab
+        })
+      }
+    }
+
+    for (const button of document.querySelectorAll('.copy')) {
+      button.addEventListener('click', async () => {
+        const text = button.parentElement.querySelector('code').textContent
+        try {
+          await navigator.clipboard.writeText(text)
+          button.textContent = 'Copied'
+        } catch {
+          button.textContent = 'Select and copy'
+        }
+        setTimeout(() => { button.textContent = 'Copy' }, 1600)
+      })
+    }
+  </script>
+  <script data-goatcounter="https://jctosta.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>
