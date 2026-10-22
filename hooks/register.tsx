@@ -690,9 +690,10 @@ function clip(text: string, width: number): string {
 function ago(iso: string): string {
   const ms = Date.now() - Date.parse(iso)
   if (!Number.isFinite(ms) || ms < 60000) return 'just now'
-  const m = Math.floor(ms / 60000)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 48) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
+  const minutes = Math.floor(ms / 60000)
+  if (minutes < 60) return `${minutes}m ago`
+  // Not `h`: JSX in this file compiles to calls of h.
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
 }
